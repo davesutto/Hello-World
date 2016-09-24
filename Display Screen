@@ -1,0 +1,22 @@
+Bought a non-offical 7 inch display.
+
+It's  1024 * 600.   A format not supported by the Pi. 
+
+Loaded Raspian onto the Pi using Noobs. 
+
+The display does not work at all. It does however work fine on a laptop, the the problem is therefore with the PI.
+
+Need to update the Pi to use a standard format that works on the display. 
+
+Amended config.txt using nano.      sudo nano config.txt
+
+set display to 1024 * 768.   The best fit.
+
+hdmi_group=2
+hdmi_mode=16     details on Pi web site
+
+now need to get rid of the extra 168 lines
+
+overscan_bottom=168
+
+WORKS FINE NOW  !!
