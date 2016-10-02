@@ -19,4 +19,8 @@ now need to get rid of the extra 168 lines
 
 overscan_bottom=168
 
+For Pi Zero, which has no sound plug socket, sound must be output through the hdmi using:
+
+hdmi_drive=2
+
 WORKS FINE NOW  !!
