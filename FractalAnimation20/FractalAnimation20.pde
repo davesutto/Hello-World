@@ -191,11 +191,7 @@ void drawImageOverlay() {
   fill(0, 0, 0, 40 * (fadeAlpha / 255.0));
   rect(-imgW / 2 + 6, -imgH / 2 + 6, imgW, imgH);
 
-  // Clip the warped mesh to its allotted area so bending/warping never
-  // pushes image content outside it.
-  clip(-imgW / 2, -imgH / 2, imgW + 6, imgH + 6);
   drawWarpedImage(currentImg, imgW, imgH, fadeAlpha, t);
-  noClip();
 
   popMatrix();
   popStyle();
