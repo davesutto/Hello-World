@@ -191,7 +191,11 @@ void drawImageOverlay() {
   fill(0, 0, 0, 40 * (fadeAlpha / 255.0));
   rect(-imgW / 2 + 6, -imgH / 2 + 6, imgW, imgH);
 
+  // Clip the warped mesh to the frame so bending/warping never pushes
+  // image content past the border drawn below.
+  clip(-imgW / 2, -imgH / 2, imgW + 6, imgH + 6);
   drawWarpedImage(currentImg, imgW, imgH, fadeAlpha, t);
+  noClip();
 
   noFill();
   stroke(0, 0, 100, 60 * (fadeAlpha / 255.0));
