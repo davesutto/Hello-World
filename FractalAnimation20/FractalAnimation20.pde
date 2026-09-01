@@ -6,6 +6,11 @@
 // it's shown, then fading out again before it vanishes (5s total).
 // The animation is unaffected throughout.
 //
+// Less often than that — and never at the same time — a short
+// "inversion" is shown instead: a commonly asked question answered
+// by turning it around, rather than with the expected answer. It's
+// held on screen for as long as it takes to read, then fades out.
+//
 // The image folder is watched while the sketch runs (see
 // RESCAN_INTERVAL_FRAMES below): just drop new images into
 // fractalFolder, or delete ones you don't want any more, and the
@@ -84,6 +89,66 @@ float warpFreqX, warpFreqY;
 float warpSpeedX, warpSpeedY;
 float warpPhaseX, warpPhaseY;
 
+// ---- Inversions ----
+// Each entry pairs a commonly asked question with an answer that
+// turns the question around rather than giving the expected one.
+String[] inversionQuestions = {
+  "What is the meaning of life?",
+  "How do I become successful?",
+  "How do I find happiness?",
+  "How do I make the right decision?",
+  "How do I overcome fear?",
+  "How do I become more creative?",
+  "What should I do with my life?",
+  "How can I be more productive?",
+  "How do I stop procrastinating?",
+  "How do I find true love?",
+  "How do I deal with failure?",
+  "How do I get people to like me?",
+  "How do I become wealthy?",
+  "How do I change the world?",
+  "What happens after we die?",
+  "How do I let go of the past?",
+  "How do I know what I really want?",
+  "How do I become wise?",
+  "How do I stop worrying?",
+  "What makes art good?"
+};
+String[] inversionAnswers = {
+  "Meaning isn't found. It's made, by what you give your days to.",
+  "Don't ask how to succeed. Ask how you'd guarantee failure, then stop doing that.",
+  "Stop chasing happiness. Start removing what's making you miserable.",
+  "Don't find the right choice. Picture regretting the wrong one, then avoid it.",
+  "Don't wait for fear to leave. Act with it standing right beside you.",
+  "Creativity isn't more good ideas. It's permission to have bad ones first.",
+  "Don't search for a calling. Notice what you already do for free.",
+  "Productivity isn't doing more. It's finally stopping the wrong things.",
+  "Don't fight procrastination. Shrink the task until starting beats avoiding.",
+  "Stop searching for the right person. Become someone worth being found by.",
+  "Failure isn't success's opposite. It's the price you pay to earn it.",
+  "Stop trying to be liked. Start being someone worth trusting.",
+  "Wealth isn't what you earn. It's what you don't spend chasing status.",
+  "You don't change the world. You change the room you're standing in.",
+  "Wrong question. Ask instead what should happen before you die.",
+  "You don't release the past. You outgrow it, by building something bigger.",
+  "Don't meditate on what you want. Notice what you envy, it's a map.",
+  "Wisdom isn't knowing more. It's knowing what to stop paying attention to.",
+  "Don't suppress the worry. Schedule it, and it stops running your day.",
+  "Good art isn't what you understand. It's what you can't look away from."
+};
+
+boolean showingText = false;
+int textShowStartFrame;
+int nextTextFrame;
+int textShowFrames;
+int currentTextIndex = -1;
+ArrayList<Integer> textShuffleBag;
+int lastShownTextIndex = -1;
+
+final int TEXT_FADE_FRAMES = 45;        // 0.75s fade in, 0.75s fade out
+final int TEXT_MIN_READ_FRAMES = 5 * 60; // floor, even for a short line
+final float TEXT_READING_WORDS_PER_MIN = 110; // comfortable ambient pace
+
 void setup() {
   size(1920, 1080, P2D);
   frameRate(60);
@@ -114,9 +179,12 @@ void setup() {
   imgW = width * scaleFactor;
   imgH = height * scaleFactor;
 
+  textShuffleBag = new ArrayList<Integer>();
+
   scheduleNextShockwave();
   scheduleNextMutate();
   scheduleNextImage();
+  scheduleNextText();
   mutate();
 }
 
@@ -128,7 +196,7 @@ void draw() {
     nextRescanFrame = frameCount + RESCAN_INTERVAL_FRAMES;
   }
 
-  if (!showingImage && !imagePaths.isEmpty() && frameCount >= nextImageFrame) {
+  if (!showingImage && !showingText && !imagePaths.isEmpty() && frameCount >= nextImageFrame) {
     currentImg = loadImage(nextImagePath());
     imgX = random(0, width - imgW);
     imgY = random(0, height - imgH);
@@ -159,20 +227,27 @@ void draw() {
       scheduleNextImage();
     }
   }
+
+  if (!showingText && !showingImage && frameCount >= nextTextFrame) {
+    currentTextIndex = nextTextIndex();
+    textShowStartFrame = frameCount;
+    textShowFrames = computeTextShowFrames(currentTextIndex);
+    showingText = true;
+  }
+
+  if (showingText) {
+    drawInversionText();
+    if (frameCount - textShowStartFrame >= textShowFrames) {
+      showingText = false;
+      scheduleNextText();
+    }
+  }
 }
 
 void drawImageOverlay() {
   if (currentImg == null) return;
   int elapsed = frameCount - imageShowStartFrame;
-  float fadeAlpha;
-  if (elapsed < IMAGE_FADE_FRAMES) {
-    fadeAlpha = map(elapsed, 0, IMAGE_FADE_FRAMES, 0, 255);
-  } else if (elapsed > IMAGE_SHOW_FRAMES - IMAGE_FADE_FRAMES) {
-    fadeAlpha = map(elapsed, IMAGE_SHOW_FRAMES - IMAGE_FADE_FRAMES, IMAGE_SHOW_FRAMES, 255, 0);
-  } else {
-    fadeAlpha = 255;
-  }
-  fadeAlpha = constrain(fadeAlpha, 0, 255);
+  float fadeAlpha = fadeInOut(elapsed, IMAGE_SHOW_FRAMES, IMAGE_FADE_FRAMES);
 
   float t = elapsed / 60.0;
   // Twist: a gentle rocking rotation, never a full spin
@@ -236,6 +311,95 @@ PVector warpPoint(float u, float v, float w, float h, float t) {
     + sin(v * warpFreqY * 0.5 + t * warpSpeedY * 0.7 + warpPhaseY) * warpAmpY * 0.4;
 
   return new PVector(px + bendX, py + bendY);
+}
+
+// --------------------------------------------------------------
+// Inversions — a question and its inverted answer, held on screen
+// long enough to read, faded in and out the same way the fractal
+// images are.
+// --------------------------------------------------------------
+void drawInversionText() {
+  int elapsed = frameCount - textShowStartFrame;
+  float fadeAlpha = fadeInOut(elapsed, textShowFrames, TEXT_FADE_FRAMES);
+
+  float panelW = width * 0.62;
+  float panelH = height * 0.4;
+  float padding = 40;
+  float questionZoneH = panelH * 0.32;
+  float answerZoneH = panelH * 0.6;
+
+  pushStyle();
+  pushMatrix();
+  translate(width / 2.0, height / 2.0);
+
+  rectMode(CENTER);
+  noStroke();
+  fill(0, 0, 0, 65 * (fadeAlpha / 255.0));
+  rect(0, 0, panelW, panelH, 18);
+
+  textAlign(CENTER, CENTER);
+
+  textSize(40);
+  fill(colorOffset, 10, 75, fadeAlpha);
+  text(inversionQuestions[currentTextIndex],
+    -panelW / 2 + padding, -panelH / 2 + padding * 0.5,
+    panelW - padding * 2, questionZoneH);
+
+  textSize(56);
+  fill(colorOffset, 15, 100, fadeAlpha);
+  text(inversionAnswers[currentTextIndex],
+    -panelW / 2 + padding, panelH / 2 - answerZoneH - padding * 0.5,
+    panelW - padding * 2, answerZoneH);
+
+  popMatrix();
+  popStyle();
+}
+
+// Shared fade-in/hold/fade-out curve used by both the image and text
+// overlays: ramps 0 -> 255 over fadeFrames, holds at 255, then ramps
+// back down to 0 over the last fadeFrames before showFrames is up.
+float fadeInOut(int elapsed, int showFrames, int fadeFrames) {
+  float alpha;
+  if (elapsed < fadeFrames) {
+    alpha = map(elapsed, 0, fadeFrames, 0, 255);
+  } else if (elapsed > showFrames - fadeFrames) {
+    alpha = map(elapsed, showFrames - fadeFrames, showFrames, 255, 0);
+  } else {
+    alpha = 255;
+  }
+  return constrain(alpha, 0, 255);
+}
+
+// Draws from a shuffled bag, same fairness trick as the image gallery,
+// so every inversion is shown once before any repeat.
+int nextTextIndex() {
+  if (textShuffleBag == null || textShuffleBag.isEmpty()) {
+    textShuffleBag = new ArrayList<Integer>();
+    for (int i = 0; i < inversionQuestions.length; i++) textShuffleBag.add(i);
+    Collections.shuffle(textShuffleBag);
+    if (textShuffleBag.size() > 1 && textShuffleBag.get(textShuffleBag.size() - 1) == lastShownTextIndex) {
+      Collections.swap(textShuffleBag, 0, textShuffleBag.size() - 1);
+    }
+  }
+  int idx = textShuffleBag.remove(textShuffleBag.size() - 1);
+  lastShownTextIndex = idx;
+  return idx;
+}
+
+// How long to hold the inversion fully on screen, sized to its word
+// count at a comfortable ambient reading pace, floored so even a
+// short line stays up for a minimum stretch, plus the fade budget.
+int computeTextShowFrames(int idx) {
+  int wordCount = inversionQuestions[idx].split("\\s+").length
+    + inversionAnswers[idx].split("\\s+").length;
+  int readFrames = int((wordCount / TEXT_READING_WORDS_PER_MIN) * 60 * 60);
+  return max(TEXT_MIN_READ_FRAMES, readFrames) + TEXT_FADE_FRAMES * 2;
+}
+
+// Random 25-45s at 60fps — several times rarer than the fractal
+// images — counted from when the previous inversion disappears.
+void scheduleNextText() {
+  nextTextFrame = frameCount + int(random(25, 45) * 60);
 }
 
 void runAnimationFrame() {

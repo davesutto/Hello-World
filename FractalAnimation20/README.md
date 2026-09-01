@@ -2,7 +2,9 @@
 
 A Processing sketch for the Pi display: a swirling particle animation
 that runs forever, with fractal images from a folder fading in on top
-of it every 5-10s.
+of it every 5-10s, and — less often, and never at the same time — a
+short "inversion": a commonly asked question answered by turning it
+around, rather than with the expected answer.
 
 ## Setup
 
@@ -28,6 +30,17 @@ the gallery it draws from — new files join the rotation, deleted
 files stop appearing. An image already fading in/out on screen when
 it's deleted keeps finishing its current appearance, since it's
 already loaded into memory.
+
+## Inversions
+
+`inversionQuestions[]` and `inversionAnswers[]` near the top of the
+sketch hold the question/answer pairs shown on screen — edit, add to,
+or remove from these two arrays (kept in matching order) to change
+what's displayed. Each one is shown for as long as it takes to read
+at a comfortable ambient pace (with a sensible minimum for short
+lines), fading in and out the same way the fractal images do, at a
+random 25-45s interval — several times rarer than the images, and
+never while an image is on screen.
 
 ## Running full-screen on boot (Raspberry Pi)
 
