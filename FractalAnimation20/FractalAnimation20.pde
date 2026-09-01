@@ -2,9 +2,9 @@
 // The swirl animation runs continuously, never stopping. At random
 // intervals of 5-10s, one fractal image appears on top of it at a
 // random position, sized to 75% of the screen area, fading in, then
-// gently twisting and turning while it's shown, then fading out
-// again before it vanishes (5s total). The animation is unaffected
-// throughout.
+// gently twisting, turning, and bending/warping like cloth while
+// it's shown, then fading out again before it vanishes (5s total).
+// The animation is unaffected throughout.
 //
 // The image folder is watched while the sketch runs (see
 // RESCAN_INTERVAL_FRAMES below): just drop new images into
@@ -73,6 +73,17 @@ float imgX, imgY, imgW, imgH;
 float rotAmplitude, rotSpeed, rotPhase;
 float turnAmplitude, turnSpeed, turnPhase;
 
+// Bend/warp mesh — the image is drawn as a grid of textured triangles
+// whose vertices ripple over time, so it bends like cloth rather than
+// just rotating/squashing as a rigid rectangle. Randomised fresh for
+// every appearance, same as the twist/turn parameters above.
+final int WARP_COLS = 22;
+final int WARP_ROWS = 16;
+float warpAmpX, warpAmpY;
+float warpFreqX, warpFreqY;
+float warpSpeedX, warpSpeedY;
+float warpPhaseX, warpPhaseY;
+
 void setup() {
   size(1920, 1080, P2D);
   frameRate(60);
@@ -130,6 +141,15 @@ void draw() {
     turnAmplitude = random(0.15, 0.4);
     turnSpeed = random(0.4, 1.0);
     turnPhase = random(TWO_PI);
+
+    warpAmpX = random(0.02, 0.05) * imgW;
+    warpAmpY = random(0.02, 0.05) * imgH;
+    warpFreqX = random(1.5, 3.5);
+    warpFreqY = random(1.5, 3.5);
+    warpSpeedX = random(0.5, 1.3);
+    warpSpeedY = random(0.5, 1.3);
+    warpPhaseX = random(TWO_PI);
+    warpPhaseY = random(TWO_PI);
   }
 
   if (showingImage) {
@@ -171,11 +191,7 @@ void drawImageOverlay() {
   fill(0, 0, 0, 40 * (fadeAlpha / 255.0));
   rect(-imgW / 2 + 6, -imgH / 2 + 6, imgW, imgH);
 
-  imageMode(CENTER);
-  tint(255, fadeAlpha);
-  image(currentImg, 0, 0, imgW, imgH);
-  noTint();
-  imageMode(CORNER);
+  drawWarpedImage(currentImg, imgW, imgH, fadeAlpha, t);
 
   noFill();
   stroke(0, 0, 100, 60 * (fadeAlpha / 255.0));
@@ -184,6 +200,47 @@ void drawImageOverlay() {
 
   popMatrix();
   popStyle();
+}
+
+// Draws the image as a grid of textured triangles, displacing each
+// vertex with layered sine waves so the whole picture bends and
+// ripples like cloth in a breeze while it's on screen, instead of
+// staying a rigid rectangle under the outer rotate/scale.
+void drawWarpedImage(PImage img, float w, float h, float alpha, float t) {
+  tint(255, alpha);
+  textureMode(NORMAL);
+  noStroke();
+  for (int row = 0; row < WARP_ROWS; row++) {
+    beginShape(TRIANGLE_STRIP);
+    texture(img);
+    for (int col = 0; col <= WARP_COLS; col++) {
+      float u = col / (float) WARP_COLS;
+      float v0 = row / (float) WARP_ROWS;
+      float v1 = (row + 1) / (float) WARP_ROWS;
+      PVector p0 = warpPoint(u, v0, w, h, t);
+      PVector p1 = warpPoint(u, v1, w, h, t);
+      vertex(p0.x, p0.y, u, v0);
+      vertex(p1.x, p1.y, u, v1);
+    }
+    endShape();
+  }
+  noTint();
+}
+
+// Maps a point on the flat image (u, v in [0,1]) to its bent local
+// position. Two sine terms per axis — one keyed off the other axis's
+// coordinate, one off its own — give an organic bend rather than a
+// simple uniform wave.
+PVector warpPoint(float u, float v, float w, float h, float t) {
+  float px = (u - 0.5) * w;
+  float py = (v - 0.5) * h;
+
+  float bendX = sin(v * warpFreqY + t * warpSpeedY + warpPhaseY) * warpAmpX
+    + sin(u * warpFreqX * 0.5 + t * warpSpeedX * 0.7 + warpPhaseX) * warpAmpX * 0.4;
+  float bendY = sin(u * warpFreqX + t * warpSpeedX + warpPhaseX) * warpAmpY
+    + sin(v * warpFreqY * 0.5 + t * warpSpeedY * 0.7 + warpPhaseY) * warpAmpY * 0.4;
+
+  return new PVector(px + bendX, py + bendY);
 }
 
 void runAnimationFrame() {
